@@ -1,43 +1,214 @@
-API.on(API.CHAT,onChat);
-API.on(API.DJ_ADVANCE,onDjAdv);
-API.sendChat('/me ON! ');
-var song;
-if (API.getDJs().length == 0) API.on(API.DJ_UPDATE,djUpdate);
-else song = API.getMedia().author + ' - ' + API.getMedia().title;
+/**
+ * Created with JetBrains WebStorm.
+ * User: Marko
+ * Date: 3/9/14
+ * Time: 10:34 PM
+ */
 
-function onChat(data) {
-        if (API.hasPermission(data.fromID,API.ROLE.BOUNCER)) {
-                var message = data.message.toLowerCase();
-                if (message.indexOf('!lock') == 0) API.moderateRoomProps(true,true);
-                if (message.indexOf('!unlock') == 0) API.moderateRoomProps(false,true);
-                if (message.indexOf('!lockskip') == 0) {
-                        API.moderateRoomProps(true,true);
-                        setTimeout(function(){API.moderateForceSkip();},1500);
-                        setTimeout(function(){API.moderateRoomProps(false,true);},4000);
-                }
-                if (message.indexOf('!skip') == 0) API.moderateForceSkip();
-                if (message.indexOf('!ping') == 0) API.sendChat('Pong!');
-                if (message.indexOf('!kill') == 0) {
-                        API.sendChat('OFF!');
-                        API.off(API.CHAT,onChat);
-                        API.off(API.DJ_ADVANCE,onDjAdv);
-                }
+
+function getAvailable(author)
+{
+    var avail = [];
+    for(var i = 0; i < commands.length; i++)
+    {
+        if(commands[i].hasPermission(author))
+        {
+            avail.push(commands[i]);
         }
+    }
+    return avail;
 }
 
-function onDjAdv(obj) {
-        setTimeout(function(){document.getElementById("button-vote-positive").click();},1500);
-        var songStr = song;
-        var woots = obj.lastPlay.score.positive, mehs = obj.lastPlay.score.negative, curates = obj.lastPlay.score.curates ;
-        if (woots === 1) var ww = ' woot :+1: '; else var ww = ' woots :+1: ';
-        if (mehs === 1) var mm = ' meh :-1: '; else var mm = ' mehs :-1: ';
-        if (curates === 1) var cc = ' curate :green_heart:'; else var cc = ' curates :green_heart: ';
-        var scoreStr = ' Status Music: ' + woots + ww + mehs + mm + curates + cc;
-        API.sendChat('/em: ' + songStr + scoreStr);
-        song = API.getMedia().author + ' - ' + API.getMedia().title;
+function execCommand(author, args)
+{
+    for(var i = 0; i < commands.length; i++)
+    {
+        for(var j = 0; j < commands[i].cmd.length; j++)
+        {
+            if(commands[i].cmd[j] == args[0].toLowerCase())
+            {
+                commands[i].exec(author, args);
+                return;
+            }
+        }
+    }
+    console.log(author + " has entered an invalid command.");
 }
 
-function djUpdate(djs) {
-        song = API.getMedia().author + ' - ' + API.getMedia().title;
-        API.off(API.DJ_UPDATE,djUpdate);
+
+function Command(cmd, callback, permission, customPerm)
+{
+    this.cmd = cmd.split(",");
+    this.callback = callback;
+    this.permission = typeof permission === "undefined" ? 0 : permission;
+
+    this.exec = function(author, args){
+        if(this.hasPermission(author))
+        {
+            this.callback(author, args);
+        }
+        else
+        {
+            console.log("No permission");
+        }
+    };
+
+    this.hasPermission = function(author){
+        return getPermLevel(author) >= this.permission ||
+            (typeof customPerm !== "undefined" ? customPerm(author) : false);
+    };
+
+    this.toString = function(){
+        return this.cmd.toString();
+    }
 }
+
+function LinkCommand(cmd, url)
+{
+    this.prototype = new Command(cmd, function(){
+        log(url, log.visible);
+    }).prototype;
+}
+
+var commands = [
+    new Command("goosesux", function(){
+        log("Yes he does.", log.visible);
+    }),
+
+
+    new Command("skip", function(author){
+        skipDj();
+        log(author + " has skipped " + API.getDJ().username, log.visible);
+    }, API.ROLE.BOUNCER, function(author){
+        return isPlaying(author);
+    }),
+
+
+    new Command("skipfix", function(){
+        skipFixEnabled = !skipFixEnabled;
+        log("skipfix is set to " + skipFixEnabled);
+    }, API.ROLE.MANAGER),
+
+
+    new Command("privateskip", function(){
+        var current = API.getDJ().username;
+        log("Skipping " + current + " and repositioning due to private track.", log.visible);
+        skipDj();
+        var processor = setInterval(function(){
+            if(current != API.getDJ().username)
+            {
+                clearInterval(processor);
+                moveToFirst(current);
+            }
+        }, 10);
+    }, API.ROLE.BOUNCER, function(author){
+        return isPlaying(author);
+    }),
+
+
+    new Command("eta", function(author){
+        if(isPlaying(author))
+            log("@" + author + " you're already the DJ, get your ears cleaned out!", log.visible);
+        else if(API.getWaitListPosition(getId(author)) != -1)
+            log("@" + author + ", it will be your turn to DJ in ~" + getETA(author) + " minutes.", log.visible);
+        else
+            log("@" + author + ", you are not on the DJ wait list!", log.visible);
+    }),
+
+
+    new Command("mal", function(){
+        log("ware!", log.visible);
+    }),
+
+
+    new Command("reminder", function(author, args){
+        if(args.length < 2)
+        {
+            log("@" + author + " please use in the form of '!reminder http://reddit.com/r/edmproduction/PutTheUrlHere", log.visible);
+        }
+        else {
+            lastMeetupMessageTime = 0;
+            meetupUrl = args[1];
+        }
+    }, API.ROLE.MANAGER),
+
+
+    new Command("help,commands", function(author){
+        var avail = getAvailable(author);
+        var chatoutput = "@" + author + ", you have access to the following commands: ";
+        for(var i = 0; i < avail.length; i++)
+        {
+            chatoutput += "!" + avail[i].cmd + (i != avail.length - 1 ? ", " : "");
+        }
+        log(chatoutput, log.visible);
+    }),
+
+
+    new Command("stop", function(){
+//        stop();
+        log("Stop has been disabled.", log.visible);
+    }, API.ROLE.MANAGER),
+
+
+    new Command("update", function(){
+        updateBot();
+    }, API.ROLE.MANAGER),
+
+
+    new Command("rollthedice", function(){
+        rollTheDice();
+    }),
+
+
+    new Command("afktest", function(author){
+        log("trackAFKs=" + trackAFKs, log.visible);
+        checkAFK(author);
+    }),
+
+
+    new Command("8ball", function(author){
+        eightball(author);
+    }),
+
+
+    new Command("credits", function(){
+        log("EDMPbot was developed by @overdrivenpotato and @Invincibear", log.visible);
+    }),
+
+
+    new Command("smoke", function(){
+        log("WEED ERRYDAY", log.visible);
+    }),
+
+
+    new Command("lottery", function(author){
+        if(new Date().getMinutes() >= 10)
+        {
+            log("@" + author + ", A lotaria ocorre no início de cada hora." +
+                "Type !lottery dentro de 10 minutos para uma chance de ganhar!", log.visible);
+            return;
+        }
+        if(lotteryEntries.indexOf(author) > -1)
+        {
+            log("@" + author + " você já está na loteria! " +
+                "O vencedor será escolhido a partir de " + lotteryEntries.length + " entries in " + lastLotteryTime, log.visible);
+            return;
+        }
+
+        lotteryEntries.push(author);
+        log("@" + author + " hcomo entrou na loteria! Há agora " + lotteryEntries.length + " entries!", log.visible);
+    }),
+
+
+    new Command("remove", function(author){
+        var dj = API.getDJ();
+        if(typeof dj === "undefined")
+        {
+            log("Sem dj remover.", log.visible);
+            return;
+        }
+        log(author + " removeu " + dj.username + " from the stage.", log.info);
+        API.moderateRemoveDJ(dj.id);
+    }, API.ROLE.MANAGER)
+
+];
