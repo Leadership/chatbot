@@ -87,7 +87,7 @@ var esBot = {
         name: 'ETDBot',
         creator: 'BrutosETD',
         loggedInID: null,
-        scriptLink: 'https://github.com/Velcrow/chatbot/blob/master/.gitignore',
+        scriptLink: 'https://raw.githubusercontent.com/Velcrow/chatbot/master/.gitignore',
         cmdLink: 'http://git.io/245Ppg',
         roomSettings: {
             maximumAfk: 999,
