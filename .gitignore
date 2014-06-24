@@ -84,7 +84,7 @@ var retrieveFromStorage = function(){
 var esBot = {
         version: '2.0',        
         status: false,
-        name: 'ETDBot',
+        name: 'Zuera',
         creator: 'BrutosETD',
         loggedInID: null,
         scriptLink: 'https://raw.githubusercontent.com/Velcrow/chatbot/master/.gitignore',
